@@ -151,6 +151,31 @@ int OnCalculate(const int rates_total,
 
             Comment("SHORT signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)),
                     " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
+
+            // === Draw rectangle for SHORT ===
+            int lookback = 10;
+            int highestIndex = iHighest(_Symbol, PERIOD_M10, MODE_HIGH, lookback, i);
+            double highestPrice = iHigh(_Symbol, PERIOD_M10, highestIndex);
+            double lowestPrice = iLow(_Symbol, PERIOD_M10, highestIndex);
+
+            datetime boxTime = iTime(_Symbol, PERIOD_M10, highestIndex);
+            string boxName = "Box_Short_" + IntegerToString(boxTime);
+
+            int halfWidth = 5;
+            int leftIndex = highestIndex + halfWidth;
+            int rightIndex = MathMax(highestIndex - halfWidth, 0);
+
+            datetime timeLeft  = iTime(_Symbol, PERIOD_M10, leftIndex);
+            datetime timeRight = iTime(_Symbol, PERIOD_M10, rightIndex);
+
+            if(ObjectFind(0, boxName) != -1)
+               ObjectDelete(0, boxName);
+
+            ObjectCreate(0, boxName, OBJ_RECTANGLE, 0, timeLeft, highestPrice, timeRight, lowestPrice);
+            ObjectSetInteger(0, boxName, OBJPROP_COLOR, clrRed);
+            ObjectSetInteger(0, boxName, OBJPROP_STYLE, STYLE_SOLID);
+            ObjectSetInteger(0, boxName, OBJPROP_WIDTH, 1);
+            ObjectSetInteger(0, boxName, OBJPROP_BACK, true);
          }
       }
    }
