@@ -26,7 +26,7 @@
 #property indicator_type3   DRAW_ARROW
 #property indicator_color3  clrPurple
 #property indicator_style3  STYLE_SOLID
-#property indicator_width3  2
+#property indicator_width3  3
 
 //--- Buffers
 double upArrowBuffer[];
@@ -51,8 +51,6 @@ input int ActiveEndHour   = 23;  // 11 PM UTC+8
 int macdHandle;
 
 //+------------------------------------------------------------------+
-//| OnInit                                                           |
-//+------------------------------------------------------------------+
 int OnInit()
 {
    IndicatorSetString(INDICATOR_SHORTNAME,"MACD Cross Arrows (10min)");
@@ -75,8 +73,6 @@ int OnInit()
 }
 
 //+------------------------------------------------------------------+
-//| Helper: check if current UTC+8 time is within allowed window     |
-//+------------------------------------------------------------------+
 bool IsActiveTime()
 {
    datetime serverTime = TimeCurrent();
@@ -90,8 +86,6 @@ bool IsActiveTime()
    return (hourUTC8 >= ActiveStartHour && hourUTC8 < ActiveEndHour);
 }
 
-//+------------------------------------------------------------------+
-//| OnCalculate                                                      |
 //+------------------------------------------------------------------+
 int OnCalculate(const int rates_total,
                 const int prev_calculated,
@@ -145,7 +139,10 @@ int OnCalculate(const int rates_total,
             upArrowBuffer[i] = lowVal - (_Point * ArrowOffset);
             
             int lookback = 10;
-            int lowestIndex = iLowest(_Symbol, PERIOD_M10, MODE_LOW, lookback, i);
+            if (i - lookback < 0) continue;  // prevent negative indexing
+
+            // ✅ fixed search window (looks backward instead of forward)
+            int lowestIndex = iLowest(_Symbol, PERIOD_M10, MODE_LOW, lookback, i - lookback);
             double lowestPrice = iLow(_Symbol, PERIOD_M10, lowestIndex);
             double highestPrice = iHigh(_Symbol, PERIOD_M10, lowestIndex);
 
@@ -168,14 +165,16 @@ int OnCalculate(const int rates_total,
             ObjectSetInteger(0, boxName, OBJPROP_WIDTH, 1);
             ObjectSetInteger(0, boxName, OBJPROP_BACK, true);
 
-            // --- Purple confirmation arrow condition ---
+            // --- ✅ Refactored & fixed Purple confirmation arrow ---
             double currentPrice = iClose(_Symbol, PERIOD_M10, i);
-            Print("current price: " + currentPrice + " lowest price: "  + lowestPrice + " highest price: " + highestPrice);
             if(currentPrice > lowestPrice && currentPrice < highestPrice)
             {
-               printf("purple arrow");
-               PlotIndexSetInteger(2, PLOT_ARROW, 225);
-               confirmArrowBuffer[i] = lowVal - (_Point * (ArrowOffset * 2.0));
+               double candleRange = iHigh(_Symbol, PERIOD_M10, i) - iLow(_Symbol, PERIOD_M10, i);
+               double offsetY = MathMax(_Point * (ArrowOffset * 4.0), candleRange * 0.2);
+               confirmArrowBuffer[i] = iLow(_Symbol, PERIOD_M10, i) - offsetY;
+
+               PlotIndexSetInteger(2, PLOT_ARROW, 225);    // ▲
+               PlotIndexSetInteger(2, PLOT_LINE_WIDTH, 3); // slightly bigger
             }
          }
       }
@@ -195,7 +194,8 @@ int OnCalculate(const int rates_total,
             downArrowBuffer[i] = highVal + (_Point * ArrowOffset);
 
             int lookback = 10;
-            int highestIndex = iHighest(_Symbol, PERIOD_M10, MODE_HIGH, lookback, i);
+            if (i - lookback < 0) continue;
+            int highestIndex = iHighest(_Symbol, PERIOD_M10, MODE_HIGH, lookback, i - lookback);
             double highestPrice = iHigh(_Symbol, PERIOD_M10, highestIndex);
             double lowestPrice = iLow(_Symbol, PERIOD_M10, highestIndex);
 
