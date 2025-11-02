@@ -4,8 +4,8 @@
 //+------------------------------------------------------------------+
 #property copyright "maynardpaye.com"
 #property indicator_chart_window
-#property indicator_buffers 2
-#property indicator_plots   2
+#property indicator_buffers 3
+#property indicator_plots   3
 
 //--- Plot 1: Up Arrow (LONG)
 #property indicator_label1  "LONG"
@@ -21,9 +21,17 @@
 #property indicator_style2  STYLE_SOLID
 #property indicator_width2  2
 
+//--- Plot 3: Purple Confirmation Arrow
+#property indicator_label3  "CONFIRM"
+#property indicator_type3   DRAW_ARROW
+#property indicator_color3  clrPurple
+#property indicator_style3  STYLE_SOLID
+#property indicator_width3  2
+
 //--- Buffers
 double upArrowBuffer[];
 double downArrowBuffer[];
+double confirmArrowBuffer[];
 
 //--- MACD settings
 input int FastEMA   = 12;
@@ -32,7 +40,7 @@ input int SignalSMA = 9;
 
 //--- Filters
 input int LookbackLong  = 6;   // past MACD bars must be below zero before LONG
-input int LookbackShort = 5;   // past MACD bars must be above zero before SHORT
+input int LookbackShort = 6;   // past MACD bars must be above zero before SHORT
 input int ArrowOffset   = 100; // distance in points away from candle
 
 //--- Time filter (UTC+8 active hours)
@@ -50,10 +58,12 @@ int OnInit()
    IndicatorSetString(INDICATOR_SHORTNAME,"MACD Cross Arrows (10min)");
    SetIndexBuffer(0, upArrowBuffer, INDICATOR_DATA);
    SetIndexBuffer(1, downArrowBuffer, INDICATOR_DATA);
+   SetIndexBuffer(2, confirmArrowBuffer, INDICATOR_DATA);
 
    // Wingdings arrow symbols
    PlotIndexSetInteger(0, PLOT_ARROW, 233);  // Up arrow ↑
    PlotIndexSetInteger(1, PLOT_ARROW, 234);  // Down arrow ↓
+   PlotIndexSetInteger(2, PLOT_ARROW, 159);  // Purple confirmation ↑
 
    macdHandle = iMACD(_Symbol, PERIOD_M10, FastEMA, SlowEMA, SignalSMA, PRICE_CLOSE);
    if(macdHandle == INVALID_HANDLE)
@@ -69,19 +79,15 @@ int OnInit()
 //+------------------------------------------------------------------+
 bool IsActiveTime()
 {
-   datetime serverTime = TimeCurrent();     // broker/server time
+   datetime serverTime = TimeCurrent();
    MqlDateTime t;
    TimeToStruct(serverTime, t);
 
-   // Convert to UTC+8 by adding 8 hours
+   // Convert to UTC+8
    int hourUTC8 = t.hour + 8;
-   if(hourUTC8 >= 24) hourUTC8 -= 24;  // wrap around midnight
+   if(hourUTC8 >= 24) hourUTC8 -= 24;
 
-   // Active between 07:00 and 23:00 UTC+8
-   if(hourUTC8 >= ActiveStartHour && hourUTC8 < ActiveEndHour)
-      return true;
-   else
-      return false;
+   return (hourUTC8 >= ActiveStartHour && hourUTC8 < ActiveEndHour);
 }
 
 //+------------------------------------------------------------------+
@@ -102,10 +108,10 @@ int OnCalculate(const int rates_total,
    ArraySetAsSeries(macdSignal, true);
    ArraySetAsSeries(upArrowBuffer, true);
    ArraySetAsSeries(downArrowBuffer, true);
+   ArraySetAsSeries(confirmArrowBuffer, true);
 
-   // Check time window before drawing
-   bool allowDraw = IsActiveTime();
-   if(!allowDraw)
+   // Check time window
+   if(!IsActiveTime())
    {
       Comment("Trading window closed. Active between ",
               IntegerToString(ActiveStartHour), ":00 and ",
@@ -119,6 +125,7 @@ int OnCalculate(const int rates_total,
    {
       upArrowBuffer[i] = EMPTY_VALUE;
       downArrowBuffer[i] = EMPTY_VALUE;
+      confirmArrowBuffer[i] = EMPTY_VALUE;
 
       double prevDiff = macdMain[i+1] - macdSignal[i+1];
       double currDiff = macdMain[i] - macdSignal[i];
@@ -136,11 +143,7 @@ int OnCalculate(const int rates_total,
          {
             double lowVal = iLow(_Symbol, PERIOD_M10, i);
             upArrowBuffer[i] = lowVal - (_Point * ArrowOffset);
-
-            Comment("LONG signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)),
-                    " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
-
-            // === Draw rectangle for LONG ===
+            
             int lookback = 10;
             int lowestIndex = iLowest(_Symbol, PERIOD_M10, MODE_LOW, lookback, i);
             double lowestPrice = iLow(_Symbol, PERIOD_M10, lowestIndex);
@@ -149,7 +152,7 @@ int OnCalculate(const int rates_total,
             datetime boxTime = iTime(_Symbol, PERIOD_M10, lowestIndex);
             string boxName = "Box_Long_" + IntegerToString(boxTime);
 
-            int halfWidth = 5;
+            int halfWidth = 3;
             int leftIndex = lowestIndex + halfWidth;
             int rightIndex = MathMax(lowestIndex - halfWidth, 0);
 
@@ -164,6 +167,16 @@ int OnCalculate(const int rates_total,
             ObjectSetInteger(0, boxName, OBJPROP_STYLE, STYLE_SOLID);
             ObjectSetInteger(0, boxName, OBJPROP_WIDTH, 1);
             ObjectSetInteger(0, boxName, OBJPROP_BACK, true);
+
+            // --- Purple confirmation arrow condition ---
+            double currentPrice = iClose(_Symbol, PERIOD_M10, i);
+            Print("current price: " + currentPrice + " lowest price: "  + lowestPrice + " highest price: " + highestPrice);
+            if(currentPrice > lowestPrice && currentPrice < highestPrice)
+            {
+               printf("purple arrow");
+               PlotIndexSetInteger(2, PLOT_ARROW, 225);
+               confirmArrowBuffer[i] = lowVal - (_Point * (ArrowOffset * 2.0));
+            }
          }
       }
 
@@ -181,10 +194,6 @@ int OnCalculate(const int rates_total,
             double highVal = iHigh(_Symbol, PERIOD_M10, i);
             downArrowBuffer[i] = highVal + (_Point * ArrowOffset);
 
-            Comment("SHORT signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)),
-                    " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
-
-            // === Draw rectangle for SHORT ===
             int lookback = 10;
             int highestIndex = iHighest(_Symbol, PERIOD_M10, MODE_HIGH, lookback, i);
             double highestPrice = iHigh(_Symbol, PERIOD_M10, highestIndex);
@@ -193,7 +202,7 @@ int OnCalculate(const int rates_total,
             datetime boxTime = iTime(_Symbol, PERIOD_M10, highestIndex);
             string boxName = "Box_Short_" + IntegerToString(boxTime);
 
-            int halfWidth = 5;
+            int halfWidth = 3;
             int leftIndex = highestIndex + halfWidth;
             int rightIndex = MathMax(highestIndex - halfWidth, 0);
 
