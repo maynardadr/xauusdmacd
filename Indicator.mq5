@@ -136,7 +136,7 @@ int OnCalculate(const int rates_total,
          bool allBelowZero = true;
          for(int j = 1; j <= LookbackLong; j++)
          {
-            if(macdMain[i+j] >= 0) { allBelowZero = false; break; }
+            if(macdSignal[i+j] >= 0) { allBelowZero = false; break; }
          }
 
          if(allBelowZero)
@@ -186,7 +186,7 @@ int OnCalculate(const int rates_total,
          bool allAboveZero = true;
          for(int j = 1; j <= LookbackShort; j++)
          {
-            if(macdMain[i+j] <= 0) { allAboveZero = false; break; }
+            if(macdSignal[i+j] <= 0) { allAboveZero = false; break; }
          }
 
          if(allAboveZero)
