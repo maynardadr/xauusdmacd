@@ -35,6 +35,10 @@ input int LookbackLong  = 6;   // past MACD bars must be below zero before LONG
 input int LookbackShort = 5;   // past MACD bars must be above zero before SHORT
 input int ArrowOffset   = 100; // distance in points away from candle
 
+//--- Time filter (UTC+8 active hours)
+input int ActiveStartHour = 7;   // 7 AM UTC+8
+input int ActiveEndHour   = 23;  // 11 PM UTC+8
+
 //--- Handle
 int macdHandle;
 
@@ -61,6 +65,26 @@ int OnInit()
 }
 
 //+------------------------------------------------------------------+
+//| Helper: check if current UTC+8 time is within allowed window     |
+//+------------------------------------------------------------------+
+bool IsActiveTime()
+{
+   datetime serverTime = TimeCurrent();     // broker/server time
+   MqlDateTime t;
+   TimeToStruct(serverTime, t);
+
+   // Convert to UTC+8 by adding 8 hours
+   int hourUTC8 = t.hour + 8;
+   if(hourUTC8 >= 24) hourUTC8 -= 24;  // wrap around midnight
+
+   // Active between 07:00 and 23:00 UTC+8
+   if(hourUTC8 >= ActiveStartHour && hourUTC8 < ActiveEndHour)
+      return true;
+   else
+      return false;
+}
+
+//+------------------------------------------------------------------+
 //| OnCalculate                                                      |
 //+------------------------------------------------------------------+
 int OnCalculate(const int rates_total,
@@ -78,6 +102,16 @@ int OnCalculate(const int rates_total,
    ArraySetAsSeries(macdSignal, true);
    ArraySetAsSeries(upArrowBuffer, true);
    ArraySetAsSeries(downArrowBuffer, true);
+
+   // Check time window before drawing
+   bool allowDraw = IsActiveTime();
+   if(!allowDraw)
+   {
+      Comment("Trading window closed. Active between ",
+              IntegerToString(ActiveStartHour), ":00 and ",
+              IntegerToString(ActiveEndHour), ":00 UTC+8");
+      return(rates_total);
+   }
 
    int start = prev_calculated > 1 ? prev_calculated - 1 : 1;
 
@@ -106,17 +140,16 @@ int OnCalculate(const int rates_total,
             Comment("LONG signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)),
                     " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
 
-            // === NEW FEATURE: Draw rectangle at lowest candle of past 10 ===
+            // === Draw rectangle for LONG ===
             int lookback = 10;
             int lowestIndex = iLowest(_Symbol, PERIOD_M10, MODE_LOW, lookback, i);
             double lowestPrice = iLow(_Symbol, PERIOD_M10, lowestIndex);
             double highestPrice = iHigh(_Symbol, PERIOD_M10, lowestIndex);
 
-            // Compute box boundaries (centered on identified candle)
             datetime boxTime = iTime(_Symbol, PERIOD_M10, lowestIndex);
-            string boxName = "Box_" + IntegerToString(boxTime);
+            string boxName = "Box_Long_" + IntegerToString(boxTime);
 
-            int halfWidth = 5; // 5 candles left/right = total width 10
+            int halfWidth = 5;
             int leftIndex = lowestIndex + halfWidth;
             int rightIndex = MathMax(lowestIndex - halfWidth, 0);
 
@@ -126,12 +159,11 @@ int OnCalculate(const int rates_total,
             if(ObjectFind(0, boxName) != -1)
                ObjectDelete(0, boxName);
 
-            // Create rectangle box
             ObjectCreate(0, boxName, OBJ_RECTANGLE, 0, timeLeft, highestPrice, timeRight, lowestPrice);
             ObjectSetInteger(0, boxName, OBJPROP_COLOR, clrAqua);
             ObjectSetInteger(0, boxName, OBJPROP_STYLE, STYLE_SOLID);
             ObjectSetInteger(0, boxName, OBJPROP_WIDTH, 1);
-            ObjectSetInteger(0, boxName, OBJPROP_BACK, true); // behind candles
+            ObjectSetInteger(0, boxName, OBJPROP_BACK, true);
          }
       }
 
