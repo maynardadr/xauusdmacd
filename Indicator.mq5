@@ -87,7 +87,7 @@ int OnCalculate(const int rates_total,
       if(prevDiff < 0 && currDiff > 0)
       {
          double lowVal = iLow(_Symbol, PERIOD_M10, i);
-         upArrowBuffer[i] = lowVal - (_Point * 20);
+         upArrowBuffer[i] = lowVal - (_Point * 100);
          Comment("LONG signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)), 
                  " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
       }
@@ -96,7 +96,7 @@ int OnCalculate(const int rates_total,
       if(prevDiff > 0 && currDiff < 0)
       {
          double highVal = iHigh(_Symbol, PERIOD_M10, i);
-         downArrowBuffer[i] = highVal + (_Point * 20);
+         downArrowBuffer[i] = highVal + (_Point * 100);
          Comment("SHORT signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)), 
                  " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
       }
