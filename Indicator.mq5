@@ -1,20 +1,20 @@
 //+------------------------------------------------------------------+
-//|                      MACD Cross Arrows Indicator (10-minute)     |
-//|                      Author: Nard & ChatGPT (GPT-5)              |
+//|                   MACD Cross Arrows Indicator (10-minute)        |
+//|                   Author: Nard & ChatGPT (GPT-5)                 |
 //+------------------------------------------------------------------+
 #property copyright "maynardpaye.com"
 #property indicator_chart_window
 #property indicator_buffers 2
 #property indicator_plots   2
 
-//--- Plot 1: Up Arrow
+//--- Plot 1: Up Arrow (LONG)
 #property indicator_label1  "LONG"
 #property indicator_type1   DRAW_ARROW
 #property indicator_color1  clrLime
 #property indicator_style1  STYLE_SOLID
 #property indicator_width1  2
 
-//--- Plot 2: Down Arrow
+//--- Plot 2: Down Arrow (SHORT)
 #property indicator_label2  "SHORT"
 #property indicator_type2   DRAW_ARROW
 #property indicator_color2  clrRed
@@ -30,6 +30,11 @@ input int FastEMA   = 12;
 input int SlowEMA   = 26;
 input int SignalSMA = 9;
 
+//--- Filters
+input int LookbackLong  = 6;   // past MACD bars must be below zero before LONG
+input int LookbackShort = 5;   // past MACD bars must be above zero before SHORT
+input int ArrowOffset   = 100; // distance in points away from candle
+
 //--- Handle
 int macdHandle;
 
@@ -42,8 +47,9 @@ int OnInit()
    SetIndexBuffer(0, upArrowBuffer, INDICATOR_DATA);
    SetIndexBuffer(1, downArrowBuffer, INDICATOR_DATA);
 
-   PlotIndexSetInteger(0, PLOT_ARROW, 233); // Up arrow
-   PlotIndexSetInteger(1, PLOT_ARROW, 234); // Down arrow
+   // Wingdings arrow symbols
+   PlotIndexSetInteger(0, PLOT_ARROW, 233);  // Up arrow ↑
+   PlotIndexSetInteger(1, PLOT_ARROW, 234);  // Down arrow ↓
 
    macdHandle = iMACD(_Symbol, PERIOD_M10, FastEMA, SlowEMA, SignalSMA, PRICE_CLOSE);
    if(macdHandle == INVALID_HANDLE)
@@ -86,19 +92,37 @@ int OnCalculate(const int rates_total,
       //--- Bullish cross (MACD crosses above signal)
       if(prevDiff < 0 && currDiff > 0)
       {
-         double lowVal = iLow(_Symbol, PERIOD_M10, i);
-         upArrowBuffer[i] = lowVal - (_Point * 100);
-         Comment("LONG signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)), 
-                 " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
+         bool allBelowZero = true;
+         for(int j = 1; j <= LookbackLong; j++)
+         {
+            if(macdMain[i+j] >= 0) { allBelowZero = false; break; }
+         }
+
+         if(allBelowZero)
+         {
+            double lowVal = iLow(_Symbol, PERIOD_M10, i);
+            upArrowBuffer[i] = lowVal - (_Point * ArrowOffset);
+            Comment("LONG signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)),
+                    " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
+         }
       }
 
       //--- Bearish cross (MACD crosses below signal)
       if(prevDiff > 0 && currDiff < 0)
       {
-         double highVal = iHigh(_Symbol, PERIOD_M10, i);
-         downArrowBuffer[i] = highVal + (_Point * 100);
-         Comment("SHORT signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)), 
-                 " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
+         bool allAboveZero = true;
+         for(int j = 1; j <= LookbackShort; j++)
+         {
+            if(macdMain[i+j] <= 0) { allAboveZero = false; break; }
+         }
+
+         if(allAboveZero)
+         {
+            double highVal = iHigh(_Symbol, PERIOD_M10, i);
+            downArrowBuffer[i] = highVal + (_Point * ArrowOffset);
+            Comment("SHORT signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)),
+                    " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
+         }
       }
    }
    return(rates_total);
