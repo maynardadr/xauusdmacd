@@ -102,8 +102,36 @@ int OnCalculate(const int rates_total,
          {
             double lowVal = iLow(_Symbol, PERIOD_M10, i);
             upArrowBuffer[i] = lowVal - (_Point * ArrowOffset);
+
             Comment("LONG signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)),
                     " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
+
+            // === NEW FEATURE: Draw rectangle at lowest candle of past 10 ===
+            int lookback = 10;
+            int lowestIndex = iLowest(_Symbol, PERIOD_M10, MODE_LOW, lookback, i);
+            double lowestPrice = iLow(_Symbol, PERIOD_M10, lowestIndex);
+            double highestPrice = iHigh(_Symbol, PERIOD_M10, lowestIndex);
+
+            // Compute box boundaries (centered on identified candle)
+            datetime boxTime = iTime(_Symbol, PERIOD_M10, lowestIndex);
+            string boxName = "Box_" + IntegerToString(boxTime);
+
+            int halfWidth = 5; // 5 candles left/right = total width 10
+            int leftIndex = lowestIndex + halfWidth;
+            int rightIndex = MathMax(lowestIndex - halfWidth, 0);
+
+            datetime timeLeft  = iTime(_Symbol, PERIOD_M10, leftIndex);
+            datetime timeRight = iTime(_Symbol, PERIOD_M10, rightIndex);
+
+            if(ObjectFind(0, boxName) != -1)
+               ObjectDelete(0, boxName);
+
+            // Create rectangle box
+            ObjectCreate(0, boxName, OBJ_RECTANGLE, 0, timeLeft, highestPrice, timeRight, lowestPrice);
+            ObjectSetInteger(0, boxName, OBJPROP_COLOR, clrAqua);
+            ObjectSetInteger(0, boxName, OBJPROP_STYLE, STYLE_SOLID);
+            ObjectSetInteger(0, boxName, OBJPROP_WIDTH, 1);
+            ObjectSetInteger(0, boxName, OBJPROP_BACK, true); // behind candles
          }
       }
 
@@ -120,6 +148,7 @@ int OnCalculate(const int rates_total,
          {
             double highVal = iHigh(_Symbol, PERIOD_M10, i);
             downArrowBuffer[i] = highVal + (_Point * ArrowOffset);
+
             Comment("SHORT signal @ ", TimeToString(iTime(_Symbol, PERIOD_M10, i)),
                     " | Price=", DoubleToString(iClose(_Symbol, PERIOD_M10, i), 5));
          }
